@@ -35,6 +35,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 PROXIES = {}
 logger = logging.getLogger('log')
 
+# The bellow is for CVE-2023-42820
 CAPTCHA_IMAGE_SIZE = (180, 38)
 CAPTCHA_PUNCTUATION = """_"',.;:-"""
 
@@ -295,7 +296,7 @@ class ResetContext:
         self.req.trust_env = False
         self.key = ""
         self.init_captcha_url = ""
-        self.propagate_count = 100
+        self.propagate_count = 50
         self.username = kwargs.get("username", None)
         self.user_email = kwargs.get("user_email", None)
 
@@ -305,6 +306,7 @@ class ResetContext:
             self.user_email = DEFAULT_EMAIL
 
 
+# The bellow is for 2023-42442
 class DumpContext:
     def __init__(self, baseurl, outpath):
         self.baseurl = baseurl
@@ -396,6 +398,7 @@ def dump_sessions(ctx):
         json_bytes = json.dumps(s).encode("utf-8")
         gz_bytes = get_gzip_bytes(resp.data)
 
+        # TODO: distinguish the output into specific protocol path or host names for readability of the output file?
         # note: The filename here must be id.tar, otherwise the jumpserver player cannot play it
         out_path = "{}/{}.tar".format(base_outpath, s["id"])
         with tarfile.open(out_path, mode='w') as tar:

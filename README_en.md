@@ -27,10 +27,12 @@ python3 -m pip install -r requirements.txt
 ```bash
 python3 blackjump.py reset htts://vulerability
 ```
+![img.png](img/img.png)
 + CVE-2023-42442: The `<uuid4>.tar` file in the `outputs/` directory can be thrown into the <u>[jumpserver player](https://github.com/jumpserver/VideoPlayer/releases)</u>
 ```bash
 python3 blackjump.py dump htts://vulerability
 ```
+![img_1.png](img/img_1.png)
 + help
 ```bash
 python3 blackjump.py {reset,dump} -h
