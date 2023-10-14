@@ -1,6 +1,6 @@
 ## blackjump
 
-[中文](https://github.com/tarimoe/blackjump/README.md) | [English](https://github.com/tarimoe/blackjump/README_en.md)
+[中文](https://github.com/tarimoe/blackjump/) | [English](https://github.com/tarimoe/blackjump/blob/main/README_en.md)
 
 > 免责声明: 本工具仅面向合法授权的企业安全建设行为，例如企业内部攻防演练、漏洞验证和复测，如您需要测试本工具的可用性，请自行搭建靶机环境。
 > 
