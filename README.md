@@ -21,13 +21,13 @@ python3 -m pip install -r requirements.txt
 ## 使用指南
 + CVE-2023-42820: 如果知道目标的用户名和邮箱可以指定 `--user` 和 `--email` 参数
 ```bash
-python3 blackjump.py reset htts://vulerability
+python3 blackjump.py reset https://vulerability
 ```
 ![img.png](img/img.png)
 
 + CVE-2023-42442: `output/` 目录下的 `<uuid4>.tar` 文件扔进 <u>[jumpserver播放器播放即可](https://github.com/jumpserver/VideoPlayer/releases)</u> 
 ```bash
-python3 blackjump.py dump htts://vulerability
+python3 blackjump.py dump https://vulerability
 ```
 ![img_1.png](img/img_1.png)
 + 帮助

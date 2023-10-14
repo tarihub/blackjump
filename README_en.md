@@ -25,12 +25,12 @@ python3 -m pip install -r requirements.txt
 ## Usage
 + CVE-2023-42820: You can specify `--user` and `--email` option if you know the username and email in reset password module
 ```bash
-python3 blackjump.py reset htts://vulerability
+python3 blackjump.py reset https://vulerability
 ```
 ![img.png](img/img.png)
 + CVE-2023-42442: The `<uuid4>.tar` file in the `outputs/` directory can be thrown into the <u>[jumpserver player](https://github.com/jumpserver/VideoPlayer/releases)</u>
 ```bash
-python3 blackjump.py dump htts://vulerability
+python3 blackjump.py dump https://vulerability
 ```
 ![img_1.png](img/img_1.png)
 + help
