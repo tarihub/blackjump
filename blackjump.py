@@ -385,10 +385,10 @@ def dump_sessions(ctx):
 
         replay_url = "{}/{}/{}{}".format("/media/xpack/../replay", dash_time, s["id"], replay_ext)
         # Can't direct use requests.get(), see https://mazinahmed.net/blog/testing-for-path-traversal-with-python/
-        if ctx.baseurl.startswith("http"):
-            c_pool = urllib3.HTTPConnectionPool
-        else:
+        if ctx.baseurl.startswith("https"):
             c_pool = urllib3.HTTPSConnectionPool
+        else:
+            c_pool = urllib3.HTTPConnectionPool
         pool = c_pool(parsed_baseurl.hostname, parsed_baseurl.port)
         resp = pool.urlopen("GET", replay_url)
         if resp.status != 200:
