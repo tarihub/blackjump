@@ -1,3 +1,5 @@
-requests
 aiohttp
+urllib3
+requests
+websockets
 beautifulsoup4
