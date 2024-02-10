@@ -12,6 +12,7 @@
 JumpServer 堡垒机综合漏洞利用
 - [x] 未授权任意用户密码重置 (CVE-2023-42820)
 - [x] 未授权一键下载所有操作录像 (CVE-2023-42442)
+- [x] 未授权任意命令执行漏洞 (RCE 2021)
 
 ## 安装
 ```bash
@@ -29,8 +30,18 @@ python3 blackjump.py reset https://vulerability
 ```bash
 python3 blackjump.py dump https://vulerability
 ```
-![img_1.png](img/img_1.png)
+![img_1.png](img/img_1.png)e
+
++ RCE
+```shell
+python3 blackjump.py rce http(s)://vulerability
+```
+![img.png](img/img_2.png)
+
 + 帮助
 ```bash
 python3 blackjump.py {reset,dump} -h
 ```
+
+## 参考
+1. https://github.com/Veraxy00/Jumpserver-EXP (在此基础上优化部分情况命令执行失败或获取不到资产问题)

