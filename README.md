@@ -40,7 +40,7 @@ python3 blackjump.py rce http(s)://vulerability
 
 + 帮助
 ```bash
-python3 blackjump.py {reset,dump} -h
+python3 blackjump.py {reset,dump,rce} -h
 ```
 
 ## 参考

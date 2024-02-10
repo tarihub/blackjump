@@ -43,5 +43,8 @@ python3 blackjump.py rce http(s)://vulerability
 
 + help
 ```bash
-python3 blackjump.py {reset,dump} -h
+python3 blackjump.py {reset,dump,rce} -h
 ```
+
+## Ref
+1. https://github.com/Veraxy00/Jumpserver-EXP (Made some optimizations)
