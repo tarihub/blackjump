@@ -2,10 +2,8 @@
 
 [简体中文](https://github.com/tarimoe/blackjump/README.md) | [English](https://github.com/tarimoe/blackjump/README_EN.md)
 
-> Legal Disclaimer: This tool is only intended for legally authorized enterprise security construction activities, 
-> such as internal attack and defense drills, vulnerability verification, and retesting. 
+> Legal Disclaimer: This tool is only intended for legally authorized enterprise security construction activities. 
 > 
-> If you need to test the usability of this tool, please build your own target environment. 
 > When using this tool for testing, you should ensure that the behavior complies with local laws and 
 > regulations and has obtained sufficient authorization. Do not use against unauthorized targets. 
 > 
