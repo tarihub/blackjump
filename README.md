@@ -42,4 +42,4 @@ python3 blackjump.py {reset,dump,rce} -h
 ```
 
 ## 参考
-1. https://github.com/Veraxy00/Jumpserver-EXP (在此基础上优化部分情况命令执行失败或获取不到资产问题)
+1. https://github.com/Veraxy00/Jumpserver-EXP (RCE 2021 漏洞在其基础上优化部分情况命令执行失败或获取不到资产问题)
