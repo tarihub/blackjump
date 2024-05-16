@@ -367,7 +367,8 @@ def dump_sessions(ctx):
 
     sess_resp = requests.get(ctx.baseurl + "/api/v1/terminal/sessions/")
     if sess_resp.status_code != 200:
-        logger.critical("[-] Exploit failed")
+        logger.critical("[-] Status code: {}, Exploit failed".format(sess_resp.status_code))
+        exit(1);
     sess_json = sess_resp.json()
     logger.info("[*] Found {} sessions".format(len(sess_json)))
     for s in sess_json:
